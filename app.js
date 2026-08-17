@@ -766,5 +766,14 @@
     window.addEventListener("load", () => {
       navigator.serviceWorker.register("service-worker.js").catch((e) => console.warn("SW registration failed", e));
     });
+
+    // When a new service worker takes over (i.e. you've pushed an update),
+    // reload once so the page picks up the new code instead of running stale JS.
+    let hasReloadedForUpdate = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (hasReloadedForUpdate) return;
+      hasReloadedForUpdate = true;
+      window.location.reload();
+    });
   }
 })();
