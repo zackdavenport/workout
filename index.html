@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<meta name="theme-color" content="#14171A" />
+<meta name="description" content="A fast, offline workout log for dumbbell and bodyweight training." />
+<title>Iron Log</title>
+
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Iron Log" />
+
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div class="app">
+
+  <!-- Header -->
+  <header class="topbar">
+    <div class="topbar-brand">
+      <span class="plate-mark" aria-hidden="true"></span>
+      <span class="brand-name">Iron Log</span>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Primary">
+      <button class="tab is-active" data-view="today" role="tab" aria-selected="true">Today</button>
+      <button class="tab" data-view="history" role="tab" aria-selected="false">History</button>
+    </nav>
+  </header>
+
+  <main class="content">
+
+    <!-- TODAY VIEW -->
+    <section id="view-today" class="view is-active">
+      <div class="session-date" id="today-date-label"></div>
+
+      <div id="today-entries" class="entries"></div>
+
+      <div id="today-empty" class="empty-state">
+        <p class="empty-title">No exercises logged yet</p>
+        <p class="empty-sub">Add your first exercise to start today's session.</p>
+      </div>
+
+      <button id="btn-add-exercise" class="btn-add-exercise">
+        <span class="plus" aria-hidden="true">+</span> Add exercise
+      </button>
+    </section>
+
+    <!-- HISTORY VIEW -->
+    <section id="view-history" class="view">
+      <div id="history-list" class="history-list"></div>
+      <div id="history-empty" class="empty-state">
+        <p class="empty-title">No past sessions yet</p>
+        <p class="empty-sub">Sessions you log will show up here, newest first.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <button id="btn-export" class="link-btn">Export backup</button>
+    <span class="footer-dot" aria-hidden="true">&middot;</span>
+    <button id="btn-import" class="link-btn">Import backup</button>
+    <input type="file" id="import-file" accept="application/json" hidden />
+  </footer>
+</div>
+
+<!-- EXERCISE PICKER MODAL -->
+<div id="picker-modal" class="modal" aria-hidden="true">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <h2>Add exercise</h2>
+      <button id="picker-close" class="icon-btn" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="search-row">
+      <input id="picker-search" type="text" placeholder="Search exercises..." autocomplete="off" />
+    </div>
+
+    <div id="muscle-filters" class="chip-row" role="group" aria-label="Filter by muscle group"></div>
+
+    <div id="picker-list" class="picker-list"></div>
+
+    <button id="btn-new-custom" class="btn-custom">+ Create custom exercise</button>
+  </div>
+</div>
+
+<!-- CUSTOM EXERCISE MODAL -->
+<div id="custom-modal" class="modal" aria-hidden="true">
+  <div class="modal-sheet modal-sheet-short">
+    <div class="modal-header">
+      <h2>New exercise</h2>
+      <button id="custom-close" class="icon-btn" aria-label="Close">&times;</button>
+    </div>
+
+    <label class="field-label" for="custom-name">Name</label>
+    <input id="custom-name" type="text" placeholder="e.g. Cable Crossover" autocomplete="off" />
+
+    <label class="field-label">Type</label>
+    <div class="segmented" id="custom-type">
+      <button type="button" class="seg-btn is-active" data-type="dumbbell">Dumbbell</button>
+      <button type="button" class="seg-btn" data-type="bodyweight">Bodyweight</button>
+    </div>
+
+    <label class="field-label">Muscle groups</label>
+    <div id="custom-muscle-chips" class="chip-row chip-row-wrap"></div>
+
+    <button id="btn-save-custom" class="btn-primary">Save exercise</button>
+  </div>
+</div>
+
+<div id="toast" class="toast" aria-live="polite"></div>
+
+<script src="exercises.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
