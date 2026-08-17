@@ -8,8 +8,22 @@ A fast, offline-friendly workout log for dumbbell and bodyweight training. No ba
 - Filter the exercise list by muscle group (chest, back, shoulders, biceps, triceps, legs, glutes, core, full body)
 - Each exercise starts with 3 sets — add or remove sets freely
 - Log reps and weight (kg) per set, with a one-tap "BW" toggle for bodyweight sets
-- Today's session is dated automatically; past sessions are saved to History
-- Export/import a JSON backup any time, since data lives only on this device
+- Sessions are timestamped automatically; tap **End workout** when you're done to save it to History
+- Multiple people can use the app on the same device — each profile's workouts are kept completely separate (tap the profile pill in the header to switch, add, rename, or delete a profile)
+- Export/import a JSON backup of the current profile any time, since data lives only on this device
+
+## Profiles
+
+Tap the pill in the top-right of the header (shows the current profile's initial) to open the profile switcher. From there you can:
+- **Switch** — tap any name to make it active
+- **Add** — type a name at the bottom and tap Add
+- **Rename** (pencil icon) or **Delete** (✕ icon, only shown when there's more than one profile)
+
+Profiles are just named buckets of local data — there's no password. Anyone with access to the device can switch between them, which is fine for a shared household device but isn't meant to keep people out of each other's data on a device others can unlock. On first launch (or if you upgraded from an earlier version without profiles), you'll be asked to create one — any pre-existing workout history is automatically moved into a profile called "Me".
+
+## Ending a workout
+
+Your current session stays "in progress" until you tap **End workout** at the top of the Today tab. Ending it saves the session — with a start time, end time, and duration — to the History tab. If you end a workout with no exercises logged, the app will offer to discard it instead of saving an empty entry. You can start a new workout any time by tapping **+ Add exercise** again.
 
 ## Host it on GitHub Pages
 

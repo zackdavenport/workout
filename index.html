@@ -25,6 +25,10 @@
     <div class="topbar-brand">
       <span class="plate-mark" aria-hidden="true"></span>
       <span class="brand-name">Iron Log</span>
+      <button id="btn-profile" class="profile-btn" aria-haspopup="dialog">
+        <span id="profile-initial" class="profile-badge"></span>
+        <span id="profile-name-label" class="profile-name-label"></span>
+      </button>
     </div>
     <nav class="tabs" role="tablist" aria-label="Primary">
       <button class="tab is-active" data-view="today" role="tab" aria-selected="true">Today</button>
@@ -36,7 +40,10 @@
 
     <!-- TODAY VIEW -->
     <section id="view-today" class="view is-active">
-      <div class="session-date" id="today-date-label"></div>
+      <div class="session-date-row">
+        <div class="session-date" id="today-date-label"></div>
+        <button id="btn-end-workout" class="end-workout-btn">End workout</button>
+      </div>
 
       <div id="today-entries" class="entries"></div>
 
@@ -110,6 +117,26 @@
     <div id="custom-muscle-chips" class="chip-row chip-row-wrap"></div>
 
     <button id="btn-save-custom" class="btn-primary">Save exercise</button>
+  </div>
+</div>
+
+<!-- PROFILE MODAL -->
+<div id="profile-modal" class="modal" aria-hidden="true">
+  <div class="modal-sheet modal-sheet-short">
+    <div class="modal-header">
+      <h2 id="profile-modal-title">Switch profile</h2>
+      <button id="profile-close" class="icon-btn" aria-label="Close">&times;</button>
+    </div>
+
+    <p id="profile-modal-sub" class="profile-modal-sub"></p>
+
+    <div id="profile-list" class="profile-list"></div>
+
+    <label class="field-label" for="new-profile-name">Add a profile</label>
+    <div class="new-profile-row">
+      <input id="new-profile-name" type="text" placeholder="Name (e.g. Alex)" autocomplete="off" />
+      <button id="btn-add-profile" class="btn-add-profile">Add</button>
+    </div>
   </div>
 </div>
 

@@ -3,8 +3,14 @@
 
   /* ---------------- storage ---------------- */
 
-  const LS_SESSIONS = "ironlog_sessions_v1";
-  const LS_CUSTOM = "ironlog_custom_exercises_v1";
+  // Legacy (pre-profiles) single-user keys — read once for migration, then left alone.
+  const LEGACY_SESSIONS_KEY = "ironlog_sessions_v1";
+  const LEGACY_CUSTOM_KEY = "ironlog_custom_exercises_v1";
+
+  const PROFILES_KEY = "ironlog_profiles_v1";
+  const ACTIVE_PROFILE_KEY = "ironlog_active_profile_v1";
+  const sessionsKey = (profileId) => `ironlog_sessions_v2:${profileId}`;
+  const customKey = (profileId) => `ironlog_custom_exercises_v1:${profileId}`;
 
   const load = (key, fallback) => {
     try {
@@ -25,40 +31,88 @@
     }
   };
 
-  let sessions = load(LS_SESSIONS, []);          // [{id, dateKey, dateLabel, entries:[...]}]
-  let customExercises = load(LS_CUSTOM, []);      // same shape as BUILTIN_EXERCISES
+  let profiles = load(PROFILES_KEY, []);   // [{id, name}]
+  let activeProfileId = localStorage.getItem(ACTIVE_PROFILE_KEY) || null;
 
-  const persistSessions = () => save(LS_SESSIONS, sessions);
-  const persistCustom = () => save(LS_CUSTOM, customExercises);
+  let sessions = [];         // sessions for the active profile only
+  let customExercises = [];  // custom exercises for the active profile only
+
+  const persistProfiles = () => save(PROFILES_KEY, profiles);
+  const persistSessions = () => save(sessionsKey(activeProfileId), sessions);
+  const persistCustom = () => save(customKey(activeProfileId), customExercises);
+
+  function loadProfileData(profileId) {
+    sessions = load(sessionsKey(profileId), []);
+    customExercises = load(customKey(profileId), []);
+  }
+
+  // One-time upgrade path: if this device has data from before multi-profile
+  // support existed, fold it into a new "Me" profile instead of losing it.
+  function migrateLegacyDataIfNeeded() {
+    if (profiles.length > 0) return;
+
+    const legacySessions = load(LEGACY_SESSIONS_KEY, null);
+    const legacyCustom = load(LEGACY_CUSTOM_KEY, null);
+    if (!legacySessions && !legacyCustom) return;
+
+    const migratedProfile = { id: uid(), name: "Me" };
+    const migratedSessions = (legacySessions || [])
+      .filter((s) => s.entries && s.entries.length > 0)
+      .map((s) => ({
+        id: s.id || uid(),
+        startedAt: `${s.dateKey}T12:00:00`,
+        endedAt: `${s.dateKey}T12:00:00`,
+        status: "completed",
+        entries: s.entries,
+      }));
+
+    profiles = [migratedProfile];
+    persistProfiles();
+    save(sessionsKey(migratedProfile.id), migratedSessions);
+    save(customKey(migratedProfile.id), legacyCustom || []);
+    activeProfileId = migratedProfile.id;
+    localStorage.setItem(ACTIVE_PROFILE_KEY, activeProfileId);
+    localStorage.removeItem(LEGACY_SESSIONS_KEY);
+    localStorage.removeItem(LEGACY_CUSTOM_KEY);
+
+    setTimeout(() => showToast("Your existing data was moved into a profile called \u201cMe\u201d"), 600);
+  }
 
   /* ---------------- helpers ---------------- */
 
   const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 
-  const todayKey = () => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const dateKeyOf = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  // Label for the day a timestamp falls on: "Today", "Yesterday", or a full date.
+  const formatDayLabel = (iso) => {
+    const date = new Date(iso);
+    const key = dateKeyOf(date);
+    const todayK = dateKeyOf(new Date());
+    const yest = new Date();
+    yest.setDate(yest.getDate() - 1);
+    if (key === todayK) return "Today";
+    if (key === dateKeyOf(yest)) return "Yesterday";
+    return date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
   };
 
-  const formatDateLabel = (dateKey) => {
-    const [y, m, d] = dateKey.split("-").map(Number);
-    const date = new Date(y, m - 1, d);
-    const todayK = todayKey();
-    const yestDate = new Date();
-    yestDate.setDate(yestDate.getDate() - 1);
-    const yestKey = `${yestDate.getFullYear()}-${String(yestDate.getMonth() + 1).padStart(2, "0")}-${String(yestDate.getDate()).padStart(2, "0")}`;
-    if (dateKey === todayK) return "Today";
-    if (dateKey === yestKey) return "Yesterday";
-    return date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  const formatTime = (iso) => new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+
+  const formatDuration = (startIso, endIso) => {
+    const mins = Math.max(1, Math.round((new Date(endIso) - new Date(startIso)) / 60000));
+    if (mins < 60) return `${mins} min`;
+    const h = Math.floor(mins / 60), m = mins % 60;
+    return m === 0 ? `${h} hr` : `${h} hr ${m} min`;
   };
 
   const allExercises = () => [...BUILTIN_EXERCISES, ...customExercises];
 
-  const getOrCreateTodaySession = () => {
-    const key = todayKey();
-    let s = sessions.find((x) => x.dateKey === key);
+  const findActiveSession = () => sessions.find((s) => s.status === "active");
+
+  const getOrCreateActiveSession = () => {
+    let s = findActiveSession();
     if (!s) {
-      s = { id: uid(), dateKey: key, entries: [] };
+      s = { id: uid(), startedAt: new Date().toISOString(), endedAt: null, status: "active", entries: [] };
       sessions.unshift(s);
       persistSessions();
     }
@@ -99,10 +153,21 @@
   const todayDateLabelEl = document.getElementById("today-date-label");
   const todayEntriesEl = document.getElementById("today-entries");
   const todayEmptyEl = document.getElementById("today-empty");
+  const endWorkoutBtn = document.getElementById("btn-end-workout");
 
   function renderToday() {
-    const session = getOrCreateTodaySession();
-    todayDateLabelEl.textContent = formatDateLabel(session.dateKey);
+    const session = findActiveSession();
+
+    if (!session) {
+      todayDateLabelEl.textContent = "No active workout";
+      endWorkoutBtn.classList.add("is-hidden");
+      todayEntriesEl.innerHTML = "";
+      todayEmptyEl.classList.add("is-visible");
+      return;
+    }
+
+    todayDateLabelEl.textContent = `${formatDayLabel(session.startedAt)} \u00b7 In progress since ${formatTime(session.startedAt)}`;
+    endWorkoutBtn.classList.remove("is-hidden");
 
     todayEntriesEl.innerHTML = "";
     if (session.entries.length === 0) {
@@ -112,6 +177,28 @@
       session.entries.forEach((entry) => todayEntriesEl.appendChild(renderEntryCard(session, entry)));
     }
   }
+
+  endWorkoutBtn.addEventListener("click", () => {
+    const session = findActiveSession();
+    if (!session) return;
+
+    if (session.entries.length === 0) {
+      if (confirm("This workout has no exercises logged yet. Discard it?")) {
+        sessions = sessions.filter((s) => s.id !== session.id);
+        persistSessions();
+        renderToday();
+      }
+      return;
+    }
+
+    if (!confirm("End this workout and save it to your history?")) return;
+
+    session.status = "completed";
+    session.endedAt = new Date().toISOString();
+    persistSessions();
+    renderToday();
+    showToast("Workout logged");
+  });
 
   function renderEntryCard(session, entry) {
     const card = document.createElement("div");
@@ -248,7 +335,9 @@
   const historyEmptyEl = document.getElementById("history-empty");
 
   function renderHistory() {
-    const past = sessions.filter((s) => s.entries.length > 0);
+    const past = sessions
+      .filter((s) => s.status === "completed" && s.entries.length > 0)
+      .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
     historyListEl.innerHTML = "";
     if (past.length === 0) {
       historyEmptyEl.classList.add("is-visible");
@@ -270,8 +359,9 @@
         </div>
         <span class="history-chevron">&#9656;</span>
       `;
-      head.querySelector(".history-date").textContent = formatDateLabel(session.dateKey);
-      head.querySelector(".history-meta").textContent = `${session.entries.length} exercise${session.entries.length === 1 ? "" : "s"} · ${totalSets} set${totalSets === 1 ? "" : "s"}`;
+      const durationText = session.endedAt ? ` · ${formatDuration(session.startedAt, session.endedAt)}` : "";
+      head.querySelector(".history-date").textContent = `${formatDayLabel(session.startedAt)} \u00b7 ${formatTime(session.startedAt)}`;
+      head.querySelector(".history-meta").textContent = `${session.entries.length} exercise${session.entries.length === 1 ? "" : "s"} · ${totalSets} set${totalSets === 1 ? "" : "s"}${durationText}`;
       head.addEventListener("click", () => item.classList.toggle("is-open"));
       item.appendChild(head);
 
@@ -375,7 +465,7 @@
   }
 
   function addExerciseToToday(ex) {
-    const session = getOrCreateTodaySession();
+    const session = getOrCreateActiveSession();
     session.entries.push({
       id: uid(),
       exerciseId: ex.id,
@@ -464,15 +554,164 @@
     addExerciseToToday(ex);
   });
 
+  /* ---------------- profiles ---------------- */
+
+  const profileModal = document.getElementById("profile-modal");
+  const profileModalTitle = document.getElementById("profile-modal-title");
+  const profileModalSub = document.getElementById("profile-modal-sub");
+  const profileCloseBtn = document.getElementById("profile-close");
+  const profileListEl = document.getElementById("profile-list");
+  const newProfileNameInput = document.getElementById("new-profile-name");
+  const profileBadgeEl = document.getElementById("profile-initial");
+  const profileNameLabelEl = document.getElementById("profile-name-label");
+
+  function currentProfile() {
+    return profiles.find((p) => p.id === activeProfileId) || null;
+  }
+
+  function refreshProfileBadge() {
+    const p = currentProfile();
+    if (!p) return;
+    profileBadgeEl.textContent = p.name.trim().charAt(0).toUpperCase() || "?";
+    profileNameLabelEl.textContent = p.name;
+  }
+
+  function switchToProfile(profileId) {
+    activeProfileId = profileId;
+    localStorage.setItem(ACTIVE_PROFILE_KEY, activeProfileId);
+    loadProfileData(activeProfileId);
+    refreshProfileBadge();
+    renderToday();
+    renderHistory();
+  }
+
+  function openProfileModal(forced) {
+    const isOnboarding = forced || profiles.length === 0;
+    profileModalTitle.textContent = isOnboarding ? "Who's training?" : "Switch profile";
+    profileModalSub.textContent = isOnboarding
+      ? "Each person's sets and history stay private to their own profile, saved only on this device."
+      : "Data for each profile stays on this device and is kept separate.";
+    profileCloseBtn.style.visibility = (isOnboarding && profiles.length === 0) ? "hidden" : "visible";
+
+    renderProfileList();
+    newProfileNameInput.value = "";
+    profileModal.classList.add("is-open");
+    profileModal.setAttribute("aria-hidden", "false");
+    if (profiles.length === 0) setTimeout(() => newProfileNameInput.focus(), 50);
+  }
+
+  function closeProfileModal() {
+    if (profiles.length === 0) return; // must create at least one profile to proceed
+    profileModal.classList.remove("is-open");
+    profileModal.setAttribute("aria-hidden", "true");
+  }
+
+  function renderProfileList() {
+    profileListEl.innerHTML = "";
+    profiles.forEach((p) => {
+      const row = document.createElement("div");
+      row.className = "profile-row" + (p.id === activeProfileId ? " is-active" : "");
+
+      const nameBtn = document.createElement("button");
+      nameBtn.className = "profile-row-name";
+      nameBtn.textContent = p.name;
+      nameBtn.addEventListener("click", () => {
+        switchToProfile(p.id);
+        closeProfileModal();
+        showToast(`Switched to ${p.name}`);
+      });
+      row.appendChild(nameBtn);
+
+      if (p.id === activeProfileId) {
+        const tag = document.createElement("span");
+        tag.className = "profile-row-active-tag";
+        tag.textContent = "Active";
+        row.appendChild(tag);
+      }
+
+      const actions = document.createElement("div");
+      actions.className = "profile-row-actions";
+
+      const renameBtn = document.createElement("button");
+      renameBtn.className = "icon-btn-sm";
+      renameBtn.setAttribute("aria-label", `Rename ${p.name}`);
+      renameBtn.textContent = "\u270E";
+      renameBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const next = prompt("Rename profile", p.name);
+        if (next && next.trim()) {
+          p.name = next.trim();
+          persistProfiles();
+          refreshProfileBadge();
+          renderProfileList();
+        }
+      });
+      actions.appendChild(renameBtn);
+
+      if (profiles.length > 1) {
+        const deleteBtn = document.createElement("button");
+        deleteBtn.className = "icon-btn-sm";
+        deleteBtn.setAttribute("aria-label", `Delete ${p.name}`);
+        deleteBtn.textContent = "\u2715";
+        deleteBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (!confirm(`Delete "${p.name}" and all of their workout data? This can't be undone.`)) return;
+          localStorage.removeItem(sessionsKey(p.id));
+          localStorage.removeItem(customKey(p.id));
+          profiles = profiles.filter((x) => x.id !== p.id);
+          persistProfiles();
+          if (activeProfileId === p.id) {
+            switchToProfile(profiles[0].id);
+          }
+          renderProfileList();
+        });
+        actions.appendChild(deleteBtn);
+      }
+
+      row.appendChild(actions);
+      profileListEl.appendChild(row);
+    });
+  }
+
+  function addProfile() {
+    const name = newProfileNameInput.value.trim();
+    if (!name) { showToast("Enter a name first"); newProfileNameInput.focus(); return; }
+
+    const p = { id: uid(), name };
+    profiles.push(p);
+    persistProfiles();
+    save(sessionsKey(p.id), []);
+    save(customKey(p.id), []);
+    newProfileNameInput.value = "";
+
+    const wasOnboarding = profiles.length === 1;
+    switchToProfile(p.id);
+    renderProfileList();
+    if (wasOnboarding) {
+      closeProfileModal();
+      showToast(`Welcome, ${name}`);
+    } else {
+      showToast(`Added ${name}`);
+    }
+  }
+
+  document.getElementById("btn-profile").addEventListener("click", () => openProfileModal(false));
+  profileCloseBtn.addEventListener("click", closeProfileModal);
+  profileModal.addEventListener("click", (e) => { if (e.target === profileModal) closeProfileModal(); });
+  document.getElementById("btn-add-profile").addEventListener("click", addProfile);
+  newProfileNameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") addProfile(); });
+
   /* ---------------- export / import ---------------- */
 
   document.getElementById("btn-export").addEventListener("click", () => {
-    const payload = { exportedAt: new Date().toISOString(), sessions, customExercises };
+    const profileName = (profiles.find((p) => p.id === activeProfileId) || {}).name || "profile";
+    const payload = { exportedAt: new Date().toISOString(), profileName, sessions, customExercises };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `iron-log-backup-${todayKey()}.json`;
+    const safeName = profileName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "profile";
+    a.download = `iron-log-backup-${safeName}-${dateKeyOf(new Date())}.json`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -505,6 +744,21 @@
   });
 
   /* ---------------- init ---------------- */
+
+  migrateLegacyDataIfNeeded();
+
+  if (!activeProfileId || !profiles.some((p) => p.id === activeProfileId)) {
+    activeProfileId = profiles.length > 0 ? profiles[0].id : null;
+    if (activeProfileId) localStorage.setItem(ACTIVE_PROFILE_KEY, activeProfileId);
+  }
+
+  if (activeProfileId) loadProfileData(activeProfileId);
+
+  if (profiles.length === 0) {
+    openProfileModal(true);
+  } else {
+    refreshProfileBadge();
+  }
 
   renderToday();
 
