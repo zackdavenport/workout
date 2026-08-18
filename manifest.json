@@ -1,6 +1,6 @@
 {
-  "name": "Iron Log — Workout Tracker",
-  "short_name": "Iron Log",
+  "name": "モーション — Workout Tracker",
+  "short_name": "モーション",
   "description": "Log dumbbell and bodyweight workouts by sets, reps, and weight.",
   "start_url": "./index.html",
   "scope": "./",

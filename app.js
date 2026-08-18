@@ -11,6 +11,7 @@
   const ACTIVE_PROFILE_KEY = "ironlog_active_profile_v1";
   const sessionsKey = (profileId) => `ironlog_sessions_v2:${profileId}`;
   const customKey = (profileId) => `ironlog_custom_exercises_v1:${profileId}`;
+  const templatesKey = (profileId) => `ironlog_templates_v1:${profileId}`;
 
   const load = (key, fallback) => {
     try {
@@ -36,14 +37,17 @@
 
   let sessions = [];         // sessions for the active profile only
   let customExercises = [];  // custom exercises for the active profile only
+  let templates = [];        // saved workout templates for the active profile only
 
   const persistProfiles = () => save(PROFILES_KEY, profiles);
   const persistSessions = () => save(sessionsKey(activeProfileId), sessions);
   const persistCustom = () => save(customKey(activeProfileId), customExercises);
+  const persistTemplates = () => save(templatesKey(activeProfileId), templates);
 
   function loadProfileData(profileId) {
     sessions = load(sessionsKey(profileId), []);
     customExercises = load(customKey(profileId), []);
+    templates = load(templatesKey(profileId), []);
   }
 
   // One-time upgrade path: if this device has data from before multi-profile
@@ -121,6 +125,22 @@
 
   const defaultSet = () => ({ id: uid(), reps: "", weight: "", bodyweight: false });
 
+  const cloneSets = (sets) => sets.map((s) => ({ id: uid(), reps: s.reps, weight: s.weight, bodyweight: s.bodyweight }));
+
+  // Looks through completed sessions (most recent first) for the last time this
+  // exercise was logged, and returns a fresh copy of those sets. Falls back to
+  // 3 blank sets if it's never been logged before.
+  function mostRecentSetsForExercise(exerciseId) {
+    const completed = sessions
+      .filter((s) => s.status === "completed")
+      .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
+    for (const s of completed) {
+      const entry = s.entries.find((e) => e.exerciseId === exerciseId);
+      if (entry) return cloneSets(entry.sets);
+    }
+    return [defaultSet(), defaultSet(), defaultSet()];
+  }
+
   /* ---------------- toast ---------------- */
 
   let toastTimer = null;
@@ -135,7 +155,11 @@
   /* ---------------- tabs ---------------- */
 
   const tabs = document.querySelectorAll(".tab");
-  const views = { today: document.getElementById("view-today"), history: document.getElementById("view-history") };
+  const views = {
+    today: document.getElementById("view-today"),
+    templates: document.getElementById("view-templates"),
+    history: document.getElementById("view-history"),
+  };
 
   tabs.forEach((tab) => {
     tab.addEventListener("click", () => {
@@ -145,6 +169,7 @@
       Object.values(views).forEach((v) => v.classList.remove("is-active"));
       views[tab.dataset.view].classList.add("is-active");
       if (tab.dataset.view === "history") renderHistory();
+      if (tab.dataset.view === "templates") renderTemplates();
     });
   });
 
@@ -154,6 +179,7 @@
   const todayEntriesEl = document.getElementById("today-entries");
   const todayEmptyEl = document.getElementById("today-empty");
   const endWorkoutBtn = document.getElementById("btn-end-workout");
+  const todayTemplateActionsEl = document.getElementById("today-template-actions");
 
   function renderToday() {
     const session = findActiveSession();
@@ -163,6 +189,7 @@
       endWorkoutBtn.classList.add("is-hidden");
       todayEntriesEl.innerHTML = "";
       todayEmptyEl.classList.add("is-visible");
+      todayTemplateActionsEl.classList.remove("is-visible");
       return;
     }
 
@@ -172,11 +199,18 @@
     todayEntriesEl.innerHTML = "";
     if (session.entries.length === 0) {
       todayEmptyEl.classList.add("is-visible");
+      todayTemplateActionsEl.classList.remove("is-visible");
     } else {
       todayEmptyEl.classList.remove("is-visible");
+      todayTemplateActionsEl.classList.add("is-visible");
       session.entries.forEach((entry) => todayEntriesEl.appendChild(renderEntryCard(session, entry)));
     }
   }
+
+  document.getElementById("btn-save-template").addEventListener("click", () => {
+    const session = findActiveSession();
+    if (session) saveSessionAsTemplate(session);
+  });
 
   endWorkoutBtn.addEventListener("click", () => {
     const session = findActiveSession();
@@ -378,6 +412,17 @@
         e.querySelector(".history-sets").textContent = setsText;
         body.appendChild(e);
       });
+
+      const saveTplBtn = document.createElement("button");
+      saveTplBtn.className = "link-btn";
+      saveTplBtn.style.marginTop = "10px";
+      saveTplBtn.textContent = "Save as template";
+      saveTplBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        saveSessionAsTemplate(session);
+      });
+      body.appendChild(saveTplBtn);
+
       item.appendChild(body);
 
       historyListEl.appendChild(item);
@@ -552,6 +597,231 @@
     persistCustom();
     closeCustomModal();
     addExerciseToToday(ex);
+  });
+
+  /* ---------------- templates ---------------- */
+
+  const templatesListEl = document.getElementById("templates-list");
+  const templatesEmptyEl = document.getElementById("templates-empty");
+
+  function renderTemplates() {
+    templatesListEl.innerHTML = "";
+    if (templates.length === 0) {
+      templatesEmptyEl.classList.add("is-visible");
+      return;
+    }
+    templatesEmptyEl.classList.remove("is-visible");
+
+    templates.forEach((tpl) => {
+      const card = document.createElement("div");
+      card.className = "template-card";
+
+      const head = document.createElement("div");
+      head.className = "template-card-head";
+      head.innerHTML = `
+        <div>
+          <div class="template-name"></div>
+          <div class="template-sub"></div>
+        </div>
+      `;
+      head.querySelector(".template-name").textContent = tpl.name;
+      head.querySelector(".template-sub").textContent = `${tpl.exercises.length} exercise${tpl.exercises.length === 1 ? "" : "s"}`;
+      card.appendChild(head);
+
+      const list = document.createElement("div");
+      list.className = "template-exercise-list";
+      list.textContent = tpl.exercises.map((e) => e.name).join(" · ");
+      card.appendChild(list);
+
+      const actions = document.createElement("div");
+      actions.className = "template-card-actions";
+
+      const startBtn = document.createElement("button");
+      startBtn.className = "template-start-btn";
+      startBtn.textContent = "Start workout";
+      startBtn.addEventListener("click", () => startWorkoutFromTemplate(tpl));
+      actions.appendChild(startBtn);
+
+      const editBtn = document.createElement("button");
+      editBtn.className = "icon-btn-sm";
+      editBtn.setAttribute("aria-label", `Edit ${tpl.name}`);
+      editBtn.textContent = "\u270E";
+      editBtn.addEventListener("click", () => openTemplateBuilder(tpl));
+      actions.appendChild(editBtn);
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "icon-btn-sm";
+      deleteBtn.setAttribute("aria-label", `Delete ${tpl.name}`);
+      deleteBtn.textContent = "\u2715";
+      deleteBtn.addEventListener("click", () => {
+        if (!confirm(`Delete the "${tpl.name}" template? This won't affect any workouts you've already logged.`)) return;
+        templates = templates.filter((t) => t.id !== tpl.id);
+        persistTemplates();
+        renderTemplates();
+      });
+      actions.appendChild(deleteBtn);
+
+      card.appendChild(actions);
+      templatesListEl.appendChild(card);
+    });
+  }
+
+  // Save the exercises from a session (active or completed) as a reusable template.
+  function saveSessionAsTemplate(session) {
+    if (session.entries.length === 0) {
+      showToast("Add some exercises first");
+      return;
+    }
+    const name = prompt("Name this template (e.g. \u201cArm Day\u201d)");
+    if (!name || !name.trim()) return;
+
+    const seen = new Set();
+    const exercises = [];
+    session.entries.forEach((e) => {
+      if (seen.has(e.exerciseId)) return;
+      seen.add(e.exerciseId);
+      exercises.push({ exerciseId: e.exerciseId, name: e.name, type: e.type, muscles: e.muscles });
+    });
+
+    templates.push({ id: uid(), name: name.trim(), exercises });
+    persistTemplates();
+    showToast(`Saved "${name.trim()}" as a template`);
+  }
+
+  // Adds every exercise from a template into the active session (creating one if
+  // needed), pre-filled with each exercise's most recently logged sets/reps/weight.
+  function startWorkoutFromTemplate(tpl) {
+    const session = getOrCreateActiveSession();
+    let addedCount = 0;
+
+    tpl.exercises.forEach((exSnap) => {
+      const alreadyInSession = session.entries.some((e) => e.exerciseId === exSnap.exerciseId);
+      if (alreadyInSession) return;
+      session.entries.push({
+        id: uid(),
+        exerciseId: exSnap.exerciseId,
+        name: exSnap.name,
+        type: exSnap.type,
+        muscles: exSnap.muscles,
+        sets: mostRecentSetsForExercise(exSnap.exerciseId),
+      });
+      addedCount++;
+    });
+
+    persistSessions();
+    document.querySelector('.tab[data-view="today"]').click();
+    renderToday();
+    showToast(addedCount > 0 ? `Loaded "${tpl.name}"` : `${tpl.name}'s exercises are already in today's workout`);
+  }
+
+  /* ---------------- template builder modal ---------------- */
+
+  const templateModal = document.getElementById("template-modal");
+  const templateModalTitle = document.getElementById("template-modal-title");
+  const templateNameInput = document.getElementById("template-name");
+  const templatePickerSearch = document.getElementById("template-picker-search");
+  const templatePickerList = document.getElementById("template-picker-list");
+  const templateMuscleFiltersEl = document.getElementById("template-muscle-filters");
+
+  let editingTemplateId = null;
+  let templateActiveMuscleFilter = "All";
+  let templateSelectedExerciseIds = new Set();
+
+  function openTemplateBuilder(existingTpl) {
+    editingTemplateId = existingTpl ? existingTpl.id : null;
+    templateModalTitle.textContent = existingTpl ? "Edit template" : "New template";
+    templateNameInput.value = existingTpl ? existingTpl.name : "";
+    templateSelectedExerciseIds = new Set(existingTpl ? existingTpl.exercises.map((e) => e.exerciseId) : []);
+    templateActiveMuscleFilter = "All";
+    templatePickerSearch.value = "";
+
+    buildMuscleChips(templateMuscleFiltersEl, {
+      includeAll: true,
+      onSelect: (group, chip) => {
+        templateActiveMuscleFilter = group;
+        [...templateMuscleFiltersEl.children].forEach((c) => c.classList.toggle("is-active", c === chip));
+        renderTemplatePickerList();
+      },
+    });
+    templateMuscleFiltersEl.firstChild.classList.add("is-active");
+
+    renderTemplatePickerList();
+    templateModal.classList.add("is-open");
+    templateModal.setAttribute("aria-hidden", "false");
+  }
+
+  function closeTemplateBuilder() {
+    templateModal.classList.remove("is-open");
+    templateModal.setAttribute("aria-hidden", "true");
+  }
+
+  function renderTemplatePickerList() {
+    const query = templatePickerSearch.value.trim().toLowerCase();
+    const items = allExercises().filter((ex) => {
+      const matchesMuscle = templateActiveMuscleFilter === "All" || ex.muscles.includes(templateActiveMuscleFilter);
+      const matchesQuery = !query || ex.name.toLowerCase().includes(query);
+      return matchesMuscle && matchesQuery;
+    });
+
+    templatePickerList.innerHTML = "";
+    if (items.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "picker-empty";
+      empty.textContent = "No exercises match that filter.";
+      templatePickerList.appendChild(empty);
+      return;
+    }
+
+    items.forEach((ex) => {
+      const btn = document.createElement("button");
+      const isSelected = templateSelectedExerciseIds.has(ex.id);
+      btn.className = "picker-item" + (isSelected ? " is-selected" : "");
+      btn.innerHTML = `
+        <span class="picker-item-check">\u2713</span>
+        <div style="flex:1;">
+          <div class="picker-item-name"></div>
+          <div class="picker-item-muscles"></div>
+        </div>
+      `;
+      btn.querySelector(".picker-item-name").textContent = ex.name;
+      btn.querySelector(".picker-item-muscles").textContent = ex.muscles.join(" · ");
+      btn.addEventListener("click", () => {
+        if (templateSelectedExerciseIds.has(ex.id)) {
+          templateSelectedExerciseIds.delete(ex.id);
+        } else {
+          templateSelectedExerciseIds.add(ex.id);
+        }
+        renderTemplatePickerList();
+      });
+      templatePickerList.appendChild(btn);
+    });
+  }
+
+  templatePickerSearch.addEventListener("input", renderTemplatePickerList);
+  document.getElementById("btn-new-template").addEventListener("click", () => openTemplateBuilder(null));
+  document.getElementById("template-close").addEventListener("click", closeTemplateBuilder);
+  templateModal.addEventListener("click", (e) => { if (e.target === templateModal) closeTemplateBuilder(); });
+
+  document.getElementById("btn-save-template-def").addEventListener("click", () => {
+    const name = templateNameInput.value.trim();
+    if (!name) { showToast("Give the template a name"); templateNameInput.focus(); return; }
+    if (templateSelectedExerciseIds.size === 0) { showToast("Pick at least one exercise"); return; }
+
+    const exercises = allExercises()
+      .filter((ex) => templateSelectedExerciseIds.has(ex.id))
+      .map((ex) => ({ exerciseId: ex.id, name: ex.name, type: ex.type, muscles: ex.muscles }));
+
+    if (editingTemplateId) {
+      const tpl = templates.find((t) => t.id === editingTemplateId);
+      tpl.name = name;
+      tpl.exercises = exercises;
+    } else {
+      templates.push({ id: uid(), name, exercises });
+    }
+    persistTemplates();
+    closeTemplateBuilder();
+    renderTemplates();
+    showToast(`Saved "${name}"`);
   });
 
   /* ---------------- profiles ---------------- */

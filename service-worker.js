@@ -1,4 +1,4 @@
-const CACHE_NAME = "iron-log-v2";
+const CACHE_NAME = "iron-log-v4";
 
 // Paths are relative to this file's location, so this works whether the app
 // is hosted at a domain root or under a GitHub Pages project subpath.
@@ -13,6 +13,7 @@ const APP_SHELL = [
   "./icons/icon-512.png",
   "./icons/icon-maskable-192.png",
   "./icons/icon-maskable-512.png",
+  "./icons/mascot-header.png",
 ];
 
 // Files that change whenever the app is updated. These use a network-first

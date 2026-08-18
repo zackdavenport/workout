@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
 <meta name="theme-color" content="#14171A" />
 <meta name="description" content="A fast, offline workout log for dumbbell and bodyweight training." />
-<title>Iron Log</title>
+<title>モーション</title>
 
 <link rel="manifest" href="manifest.json" />
 <link rel="icon" href="icons/icon-192.png" />
 <link rel="apple-touch-icon" href="icons/icon-192.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="Iron Log" />
+<meta name="apple-mobile-web-app-title" content="モーション" />
 
 <link rel="stylesheet" href="style.css" />
 </head>
@@ -23,8 +23,8 @@
   <!-- Header -->
   <header class="topbar">
     <div class="topbar-brand">
-      <span class="plate-mark" aria-hidden="true"></span>
-      <span class="brand-name">Iron Log</span>
+      <img src="icons/mascot-header.png" alt="" class="mascot-mark" />
+      <span class="brand-name">モーション</span>
       <button id="btn-profile" class="profile-btn" aria-haspopup="dialog">
         <span id="profile-initial" class="profile-badge"></span>
         <span id="profile-name-label" class="profile-name-label"></span>
@@ -32,6 +32,7 @@
     </div>
     <nav class="tabs" role="tablist" aria-label="Primary">
       <button class="tab is-active" data-view="today" role="tab" aria-selected="true">Today</button>
+      <button class="tab" data-view="templates" role="tab" aria-selected="false">Templates</button>
       <button class="tab" data-view="history" role="tab" aria-selected="false">History</button>
     </nav>
   </header>
@@ -52,8 +53,26 @@
         <p class="empty-sub">Add your first exercise to start today's session.</p>
       </div>
 
+      <div id="today-template-actions" class="template-actions">
+        <button id="btn-save-template" class="link-btn">Save this workout as a template</button>
+      </div>
+
       <button id="btn-add-exercise" class="btn-add-exercise">
         <span class="plus" aria-hidden="true">+</span> Add exercise
+      </button>
+    </section>
+
+    <!-- TEMPLATES VIEW -->
+    <section id="view-templates" class="view">
+      <div id="templates-list" class="templates-list"></div>
+
+      <div id="templates-empty" class="empty-state">
+        <p class="empty-title">No templates yet</p>
+        <p class="empty-sub">Save a workout as a template, or build one from scratch, to reuse it any time.</p>
+      </div>
+
+      <button id="btn-new-template" class="btn-add-exercise">
+        <span class="plus" aria-hidden="true">+</span> New template
       </button>
     </section>
 
@@ -137,6 +156,28 @@
       <input id="new-profile-name" type="text" placeholder="Name (e.g. Alex)" autocomplete="off" />
       <button id="btn-add-profile" class="btn-add-profile">Add</button>
     </div>
+  </div>
+</div>
+
+<!-- TEMPLATE BUILDER MODAL -->
+<div id="template-modal" class="modal" aria-hidden="true">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <h2 id="template-modal-title">New template</h2>
+      <button id="template-close" class="icon-btn" aria-label="Close">&times;</button>
+    </div>
+
+    <label class="field-label" for="template-name">Name</label>
+    <input id="template-name" type="text" placeholder="e.g. Arm Day" autocomplete="off" />
+
+    <label class="field-label">Exercises</label>
+    <div class="search-row">
+      <input id="template-picker-search" type="text" placeholder="Search exercises..." autocomplete="off" />
+    </div>
+    <div id="template-muscle-filters" class="chip-row" role="group" aria-label="Filter by muscle group"></div>
+    <div id="template-picker-list" class="picker-list"></div>
+
+    <button id="btn-save-template-def" class="btn-primary">Save template</button>
   </div>
 </div>
 

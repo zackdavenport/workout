@@ -1,4 +1,4 @@
-# Iron Log — Workout Tracker
+# モーション (Motion) — Workout Tracker
 
 A fast, offline-friendly workout log for dumbbell and bodyweight training. No backend, no account — everything is saved privately in your phone's browser storage. It installs like a native app so you can open it from your home screen.
 
@@ -9,8 +9,17 @@ A fast, offline-friendly workout log for dumbbell and bodyweight training. No ba
 - Each exercise starts with 3 sets — add or remove sets freely
 - Log reps and weight (kg) per set, with a one-tap "BW" toggle for bodyweight sets
 - Sessions are timestamped automatically; tap **End workout** when you're done to save it to History
+- Save any workout as a reusable **template**, or build one from scratch, so a routine like "Arm Day" is one tap away
 - Multiple people can use the app on the same device — each profile's workouts are kept completely separate (tap the profile pill in the header to switch, add, rename, or delete a profile)
 - Export/import a JSON backup of the current profile any time, since data lives only on this device
+
+## Templates
+
+The **Templates** tab holds reusable workouts. There are two ways to build one:
+- **Save a workout you already did** — from an in-progress or past workout, tap "Save this workout as a template" and give it a name
+- **Build one from scratch** — tap "+ New template" in the Templates tab, name it, and pick exercises with the same search/filter picker used everywhere else
+
+Tap **Start workout** on a template to load all of its exercises into today's session. Each exercise is pre-filled with the sets, reps, and weight from the *last time you actually performed it* — so the numbers stay current as you progress, rather than staying frozen at whatever they were when you first saved the template. If you've never logged an exercise before, it starts with 3 blank sets like normal.
 
 ## Profiles
 
@@ -18,6 +27,7 @@ Tap the pill in the top-right of the header (shows the current profile's initial
 - **Switch** — tap any name to make it active
 - **Add** — type a name at the bottom and tap Add
 - **Rename** (pencil icon) or **Delete** (✕ icon, only shown when there's more than one profile)
+
 
 Profiles are just named buckets of local data — there's no password. Anyone with access to the device can switch between them, which is fine for a shared household device but isn't meant to keep people out of each other's data on a device others can unlock. On first launch (or if you upgraded from an earlier version without profiles), you'll be asked to create one — any pre-existing workout history is automatically moved into a profile called "Me".
 
